@@ -1,5 +1,6 @@
 import type { LinksFunction } from "@remix-run/node";
-import { json } from "@remix-run/node"
+import { useEffect } from "react";
+import { json , redirect, LoaderFunctionArgs} from "@remix-run/node"
 import {
   Form,
   Links,
@@ -7,9 +8,12 @@ import {
   LiveReload,
   Meta,
   Outlet,
+  NavLink,
   Scripts,
   ScrollRestoration,
-  useLoaderData
+  useLoaderData,
+  useNavigation,
+  useSubmit,
 } from "@remix-run/react";
 
 import appStylesHref from "./app.css";
@@ -25,18 +29,32 @@ export const links: LinksFunction = () => [
 ];
 
 
-export const loader = async () => {
-  const contacts = await getContacts();
-  return json({ contacts });
+export const loader = async ({
+  request
+}: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const q = url.searchParams.get("q");
+  const contacts = await getContacts(q);
+  return json({ contacts , q});
 } 
 
 export const action = async () => {
   const contact = await createEmptyContact();
-  return json({ contact })
+  return redirect(`/contacts/${contact.id}/edit`);
+  // return json({ contact })
 };
 
 export default function App() {
-const { contacts } = useLoaderData<typeof loader>();
+const { contacts, q } = useLoaderData<typeof loader>();
+const navigation = useNavigation();
+const submit = useSubmit();
+
+useEffect(() =>  {
+  const searchField = document.getElementById("q");
+  if( searchField instanceof HTMLInputElement) {
+    searchField.value = q || ""
+  }
+}, [q]);
 
   return (
     <html lang="en">
@@ -50,10 +68,16 @@ const { contacts } = useLoaderData<typeof loader>();
         <div id="sidebar">
           <h1>Remix Contacts</h1>
           <div>
-            <Form id="search-form" role="search">
+            <Form 
+             id="search-form"
+             onChange={(event) => 
+              submit(event.currentTarget)
+             }
+             role="search">
               <input
                 id="q"
                 aria-label="Search contacts"
+                defaultValue={q || ""}
                 placeholder="Search"
                 type="search"
                 name="q"
@@ -70,6 +94,17 @@ const { contacts } = useLoaderData<typeof loader>();
                 <ul>
                   {contacts.map((contact)=> (
                     <li key={contact.id}>
+                      <NavLink
+                      className={({isActive,isPending}) => 
+                        isActive
+                         ? "active"
+                         : isPending
+                          ? "pending"
+                          : ""
+                      }
+                      to={`contacts/${contact.id}`}
+                      >
+
                       <Link to={`contacts/${contact.id}`}>
                         {contact.first || contact.last ? (
                           <>
@@ -82,6 +117,7 @@ const { contacts } = useLoaderData<typeof loader>();
                           <span>★</span>
                         ) : null}
                       </Link>
+                      </NavLink>
                     </li>
                   ))}
                 </ul>
@@ -94,7 +130,11 @@ const { contacts } = useLoaderData<typeof loader>();
           </nav>
         </div>
 
-        <div id="detail">
+        <div
+         className= {
+          navigation.state === "loading"  ? "loading" : ""
+         }
+        id="detail">
           <Outlet />
         </div>  
 
